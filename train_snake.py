@@ -11,7 +11,6 @@ agent = DQNAgent(state_size)
 # Képzés paraméterek
 episodes = 300
 scores = []
-epsilon = 1.0
 
 # Képzés ciklus
 for ep in range(episodes):
@@ -24,6 +23,7 @@ for ep in range(episodes):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
+                agent.writer.close()
                 exit()
 
         # Akció választása és játék lépés
@@ -40,15 +40,16 @@ for ep in range(episodes):
 
         # Képernyő frissítése a rendereléshez
         env.render()
-
         time.sleep(0.01)
 
-    # Epsilon csökkentése a felfedezés érdekében
-    epsilon = max(agent.epsilon_min, agent.epsilon * agent.epsilon_decay)
-
     # Az aktuális eredmény kiírása
-    print(f"Tanulási kör {ep + 1}: Pontszám: {total_reward}, Felfedezési arány: {epsilon:.2f}")
+    print(f"Tanulási kör {ep + 1}: Pontszám: {total_reward}, Felfedezési arány: {agent.epsilon:.2f}")
     scores.append(total_reward)
 
-# Játék vége
+    # Eredmények naplózása TensorBoard-ba
+    agent.writer.add_scalar('Score', total_reward, ep)
+    agent.writer.add_scalar('Epsilon', agent.epsilon, ep)
+
+# Naplózás bezárása
+agent.writer.close()
 pygame.quit()

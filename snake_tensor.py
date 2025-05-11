@@ -1,7 +1,7 @@
 import pygame
 import random
 import numpy as np
-import snake_tensorflow as tf
+import tensorflow as tf
 from tensorflow.keras import models, layers, optimizers
 
 # Beállítások
@@ -50,10 +50,10 @@ class SnakeGame:
 
     def _get_state(self):
         grid = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
-        grid[self.snake[0]] = 1
-        grid[self.goal] = 2
+        grid[self.snake[0]] = 1.0
+        grid[self.goal] = 2.0
         for obs in self.obstacles:
-            grid[obs] = -1
+            grid[obs] = -1.0
         return grid.flatten()
 
     def step(self, action):
@@ -138,6 +138,11 @@ for ep in range(episodes):
     total_reward = 0
 
     while not done:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+
         if random.random() < epsilon:
             action = random.randint(0, 3)
         else:

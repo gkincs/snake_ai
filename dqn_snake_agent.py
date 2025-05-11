@@ -1,8 +1,11 @@
-import torch
+import torch 
 import torch.nn as nn
 import torch.optim as optim
 import random
 from collections import deque
+from torch.utils.tensorboard import SummaryWriter
+import os
+from datetime import datetime
 
 class Net(nn.Module):
     def __init__(self, input_size, hidden=128):
@@ -10,7 +13,7 @@ class Net(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(input_size, hidden),
             nn.ReLU(),
-            nn.Linear(hidden, 4)
+            nn.Linear(hidden, 4)  # 4 lehetséges akció
         )
 
     def forward(self, x):
@@ -26,6 +29,16 @@ class DQNAgent:
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
+
+        # TensorBoard naplózó
+        log_dir = os.path.join("runs", datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+
+        # Ellenőrizd, hogy létezik-e már a mappa, ha nem, akkor hozd létre
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+        self.writer = SummaryWriter(log_dir=log_dir)
+        self.train_step = 0
 
     def act(self, state):
         if random.random() < self.epsilon:
@@ -50,15 +63,30 @@ class DQNAgent:
         rewards = torch.FloatTensor(rewards)
         dones = torch.BoolTensor(dones)
 
+        # Q-értékek kiszámítása
         q_vals = self.model(states).gather(1, actions).squeeze()
+
         with torch.no_grad():
             q_next = self.model(next_states).max(1)[0]
         targets = rewards + self.gamma * q_next * (~dones)
 
         loss = self.loss_fn(q_vals, targets)
+
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
+        # TensorBoard-ba loss naplózása
+        self.writer.add_scalar("Loss", loss.item(), self.train_step)
+
+        # Az epsilon és score naplózása
+        self.writer.add_scalar("Epsilon", self.epsilon, self.train_step)
+        self.train_step += 1
+
+        # Epsilon csökkentése
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+    def close(self):
+        # TensorBoard writer bezárása
+        self.writer.close()
