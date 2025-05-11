@@ -1,0 +1,59 @@
+# Python cache és bytecode fájlok
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Logok és futási eredmények
+*.log
+*.out
+*.tmp
+
+# Modell súlyok
+*.pt
+*.pth
+*.h5
+
+# Notebook checkpoint
+.ipynb_checkpoints/
+
+# TensorBoard, Keras, PyTorch cache
+runs/
+logs/
+checkpoints/
+
+# Pygame, TensorFlow által generált cache vagy GUI fájlok
+.DS_Store
+.env
+.vscode/
+.idea/
+
+# Virtuális környezet
+env/
+venv/
+ENV/
+.venv/
+
+# Adatállományok
+*.npy
+*.npz
+*.csv
+
+# __main__ futtatás során keletkező fájlok
+*.swp
+*.bak
+*.~*
+
+# Egyéb: képernyőmentések, renderelt képek, teszt képek
+*.png
+*.jpg
+*.jpeg
+
+# IDE specifikus fájlok (pl. VS Code, PyCharm)
+.vscode/
+*.code-workspace
+*.sublime-*
+
+# Windows saját fájlok
+Thumbs.db
+desktop.ini
