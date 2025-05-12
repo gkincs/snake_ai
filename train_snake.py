@@ -1,7 +1,6 @@
-from game import SnakeGame
-from dqn_agent import DQNAgent
+from snake_game import SnakeGame
+from dqn_snake_agent import DQNAgent
 import pygame
-import time
 
 # Játék környezet inicializálása
 env = SnakeGame(render=True)
@@ -9,12 +8,15 @@ state_size = env._get_state().shape[0]
 agent = DQNAgent(state_size)
 
 # Képzés paraméterek
-episodes = 300
+episodes = 800
 scores = []
+
+# Célhálózat frissítése minden target_update_interval után
+target_update_interval = agent.target_update_interval
 
 # Képzés ciklus
 for ep in range(episodes):
-    state = env.reset()
+    state = env.reset()  # Reset minden epizódban új pálya
     total_reward = 0
     done = False
 
@@ -30,6 +32,18 @@ for ep in range(episodes):
         action = agent.act(state)
         next_state, reward, done = env.step(action)
 
+        # Ha cél elérése vagy akadály ütközés történt, azonnali pályaváltás
+        if done:
+            # Az aktuális eredmény kiírása
+            print(f"Tanulási kör {ep + 1}: Pontszám: {total_reward}, Felfedezési arány: {agent.epsilon:.2f}")
+            scores.append(total_reward)
+
+            # Reset új pályára
+            state = env.reset()
+            total_reward = 0
+            done = False
+            continue  # Azonnali visszatérés a következő epizódra
+
         # Memória frissítése és tanulás
         agent.remember(state, action, reward, next_state, done)
         agent.replay()
@@ -38,17 +52,17 @@ for ep in range(episodes):
         state = next_state
         total_reward += reward
 
-        # Képernyő frissítése a rendereléshez
+        # Képernyő frissítése azonnal
         env.render()
-        time.sleep(0.01)
-
-    # Az aktuális eredmény kiírása
-    print(f"Tanulási kör {ep + 1}: Pontszám: {total_reward}, Felfedezési arány: {agent.epsilon:.2f}")
-    scores.append(total_reward)
 
     # Eredmények naplózása TensorBoard-ba
-    agent.writer.add_scalar('Score', total_reward, ep)
-    agent.writer.add_scalar('Epsilon', agent.epsilon, ep)
+    if ep % 10 == 0:  # Csak minden 10. epizódban loggolunk
+        agent.writer.add_scalar('Score', total_reward, ep)
+        agent.writer.add_scalar('Epsilon', agent.epsilon, ep)
+
+    # Célhálózat frissítése minden target_update_interval epizód után
+    if ep % target_update_interval == 0:
+        agent.update_target_network()
 
 # Naplózás bezárása
 agent.writer.close()

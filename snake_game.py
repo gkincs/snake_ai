@@ -15,11 +15,14 @@ OBSTACLE_COLOR = (100, 100, 100)
 DIRECTIONS = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # fel, le, balra, jobbra
 
 class SnakeGame:
-    def __init__(self, grid_size=GRID_SIZE, num_obstacles=5, render=True):
+    def __init__(self, grid_size=GRID_SIZE, num_obstacles=5, render=True, alpha=0.1, gamma=0.9, epsilon=0.1):
         self.grid_size = grid_size
         self.num_obstacles = num_obstacles
         self.render_mode = render
         self.score = 0
+        self.alpha = alpha  # learning rate
+        self.gamma = gamma  # discount factor
+        self.epsilon = epsilon  # exploration-exploitation trade-off
 
         if self.render_mode:
             pygame.init()
@@ -39,6 +42,9 @@ class SnakeGame:
         ]
         self.done = False
         self.score = 0
+        self.last_distance = self._manhattan_distance(self.snake[0], self.goal)
+        self.q_table = {}
+        self.prev_pos = self.snake[0]  # ÚJ: előző pozíció mentése
         return self._get_state()
 
     def _random_empty_cell(self, exclude=None, max_attempts=1000):
@@ -52,6 +58,9 @@ class SnakeGame:
             attempts += 1
         raise RuntimeError("Nem található üres cella")
 
+    def _manhattan_distance(self, pos1, pos2):
+        return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+
     def _get_state(self):
         grid = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
         grid[self.snake[0]] = 1
@@ -59,6 +68,16 @@ class SnakeGame:
         for obs in self.obstacles:
             grid[obs] = -1
         return grid.flatten()
+
+    def _choose_action(self, state):
+        if random.uniform(0, 1) < self.epsilon:
+            return random.randint(0, 3)  # Explore: véletlenszerű akció
+        else:
+            # Exploit: a legjobb akció a Q-táblázat alapján
+            if state not in self.q_table:
+                self.q_table[state] = [0] * 4  # Ha az állapot nem létezik a táblázatban, inicializáljuk
+            q_values = self.q_table[state]
+            return np.argmax(q_values)
 
     def step(self, action):
         if self.done:
@@ -74,7 +93,7 @@ class SnakeGame:
             or new_head in self.obstacles
         ):
             self.done = True
-            return self._get_state(), -10, True
+            return self._get_state(), -10, True  # Halál büntetés
 
         if new_head == self.goal:
             self.score += 10
@@ -84,10 +103,45 @@ class SnakeGame:
                 self._random_empty_cell(exclude=self.snake + [self.goal])
                 for _ in range(self.num_obstacles)
             ]
-            return self._get_state(), 10, False
+            self.last_distance = self._manhattan_distance(self.snake[0], self.goal)
+            self.prev_pos = self.snake[0]  # ÚJ: frissítés cél elérése után is
+            return self._get_state(), 10, False  # Cél elérés jutalom
 
+        new_distance = self._manhattan_distance(new_head, self.goal)
+        distance_delta = self.last_distance - new_distance
+
+        # alapértelmezett büntetés minden lépésre
+        reward = -0.2
+
+        # ha közelebb kerül a célhoz
+        if distance_delta > 0:
+            reward += 0.6  # jutalom közeledésért
+
+        # ha távolodik
+        elif distance_delta < 0:
+            reward -= 0.5  # szigorúbb büntetés
+
+        # ha ugyanannyi a távolság mint előzőleg (pl. oda-vissza lépegetés)
+        elif distance_delta == 0:
+            reward -= 0.3  # extra büntetés stagnálásért
+
+        # ÚJ: ha visszalép az előző mezőre, extra büntetés
+        if new_head == self.prev_pos:
+            reward -= 0.6
+
+        self.prev_pos = self.snake[0]  # jelenlegi pozíció eltárolása
         self.snake[0] = new_head
-        return self._get_state(), 0, False
+        self.last_distance = new_distance
+        return self._get_state(), reward, False
+
+    def update_q_table(self, state, action, reward, next_state):
+        # Q-táblázat frissítése
+        next_max = np.max(self.q_table.get(next_state, [0] * 4))
+        old_q = self.q_table.get(state, [0] * 4)[action]
+        new_q = old_q + self.alpha * (reward + self.gamma * next_max - old_q)
+        if state not in self.q_table:
+            self.q_table[state] = [0] * 4
+        self.q_table[state][action] = new_q
 
     def render(self):
         if not self.render_mode:
@@ -115,19 +169,27 @@ class SnakeGame:
         rect = pygame.Rect(pos[0] * CELL_SIZE, pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE)
         pygame.draw.rect(self.screen, color, rect, border_radius=radius)
 
-# Teszt: futtatás emberi vagy AI vezérlés nélkül, véletlenszerű lépésekkel
+
+# Teszt: futtatás Q-learning AI vezérlésével
 if __name__ == "__main__":
     game = SnakeGame(render=True)
     state = game.reset()
     running = True
+    episodes = 1000  # hány epizódot futtatunk
 
-    while running and not game.done:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
+    for episode in range(episodes):
+        state = game.reset()
+        game.done = False
+        total_reward = 0
 
-        action = random.randint(0, 3)  # véletlen irány választás
-        state, reward, done = game.step(action)
-        game.render()
+        while not game.done:
+            action = game._choose_action(state)  # AI döntése
+            next_state, reward, done = game.step(action)
+            game.update_q_table(state, action, reward, next_state)
+            state = next_state
+            total_reward += reward
+            game.render()
+
+        print(f"Epizód: {episode + 1}, Pontszám: {game.score}, Teljes jutalom: {total_reward}")
 
     pygame.quit()
